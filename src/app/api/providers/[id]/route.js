@@ -5,6 +5,7 @@ import {
   updateProviderConnection,
   deleteProviderConnection,
 } from "@/models";
+import { normalizeCustomHeaders } from "open-sse/utils/customHeaders.js";
 
 function normalizeProxyConfig(body = {}) {
   const hasAnyProxyField =
@@ -161,6 +162,19 @@ export async function PUT(request, { params }) {
           delete updateData.providerSpecificData.proxyPoolId;
         } else {
           updateData.providerSpecificData.proxyPoolId = proxyPoolResult.proxyPoolId;
+        }
+      }
+
+      // Validate + sanitize user-defined custom headers when the client sends them.
+      if (providerSpecificData?.customHeaders !== undefined) {
+        const norm = normalizeCustomHeaders(providerSpecificData.customHeaders);
+        if (norm.error) {
+          return NextResponse.json({ error: norm.error }, { status: 400 });
+        }
+        if (Object.keys(norm.value).length === 0) {
+          delete updateData.providerSpecificData.customHeaders;
+        } else {
+          updateData.providerSpecificData.customHeaders = norm.value;
         }
       }
     }

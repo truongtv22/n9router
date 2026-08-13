@@ -8,6 +8,7 @@ import {
 } from "@/models";
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
+import { normalizeCustomHeaders } from "open-sse/utils/customHeaders.js";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,19 @@ export async function POST(request) {
 
     if (proxyPoolId !== null) {
       mergedProviderSpecificData.proxyPoolId = proxyPoolId;
+    }
+
+    // Validate + sanitize user-defined custom headers on the create path too (the
+    // update path validates independently). Read from the original body since the
+    // compatible/embedding branches above replace providerSpecificData with node data.
+    if (body.providerSpecificData?.customHeaders !== undefined) {
+      const norm = normalizeCustomHeaders(body.providerSpecificData.customHeaders);
+      if (norm.error) {
+        return NextResponse.json({ error: norm.error }, { status: 400 });
+      }
+      if (Object.keys(norm.value).length > 0) {
+        mergedProviderSpecificData.customHeaders = norm.value;
+      }
     }
 
     const newConnection = await createProviderConnection({

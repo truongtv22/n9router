@@ -203,4 +203,47 @@ describe("openaiToClaudeResponse", () => {
       limit: 120
     });
   });
+
+  it("emits a single message_stop when upstream sends duplicate finish_reason chunks", () => {
+    // DeepInfra/OpenRouter-shaped upstreams (cline.bot deepseek-v4-flash) send TWO
+    // terminal chunks: the first without usage, the second carrying it. Without an
+    // idempotency guard we'd emit message_delta + message_stop twice, and the
+    // Anthropic SDK throws "Received message_stop without a current message".
+    const state = { toolCalls: new Map(), messageStartSent: false, usage: null };
+    const mk = (delta, finish = null, usage = null) => ({
+      id: "gen-123",
+      model: "deepseek/deepseek-v4-flash-0731",
+      choices: [{ index: 0, delta, finish_reason: finish }],
+      ...(usage ? { usage } : {})
+    });
+
+    const stream = [
+      mk({ role: "assistant", content: "Hi" }),
+      mk({ content: "", role: "assistant", reasoning: null }, "stop"),
+      mk({ content: "", role: "assistant" }, "stop", {
+        prompt_tokens: 6457,
+        completion_tokens: 76,
+        total_tokens: 6533,
+        prompt_tokens_details: { cached_tokens: 256 }
+      })
+    ];
+
+    const emitted = [];
+    for (const chunk of stream) {
+      const r = openaiToClaudeResponse(chunk, state);
+      if (r) for (const ev of r) emitted.push(ev.type);
+    }
+
+    const count = (t) => emitted.filter((x) => x === t).length;
+    expect(count("message_start")).toBe(1);
+    expect(count("message_delta")).toBe(1);
+    expect(count("message_stop")).toBe(1);
+    // Usage from the SECOND terminal chunk must still be captured for logging:
+    // input_tokens = prompt_tokens - cached_tokens (6457 - 256).
+    expect(state.usage).toMatchObject({
+      input_tokens: 6201,
+      output_tokens: 76,
+      cache_read_input_tokens: 256
+    });
+  });
 });

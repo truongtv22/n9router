@@ -16,6 +16,7 @@ import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
 import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
+import CustomHeadersSection from "@/shared/components/CustomHeadersSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
 import ConnectionRow from "./ConnectionRow";
 import AddApiKeyModal from "./AddApiKeyModal";
@@ -40,6 +41,7 @@ export default function ProviderDetailPage() {
   const providerId = params.id;
   const { getCaps } = useModelCaps();
   const [connections, setConnections] = useState([]);
+  const [providerCustomHeaders, setProviderCustomHeaders] = useState({});
   const [loading, setLoading] = useState(true);
   const [providerNode, setProviderNode] = useState(null);
   const [proxyPools, setProxyPools] = useState([]);
@@ -309,6 +311,8 @@ export default function ProviderDetailPage() {
       if (proxyPoolsRes.ok) {
         setProxyPools(proxyPoolsData.proxyPools || []);
       }
+      // Load provider-level custom headers
+      setProviderCustomHeaders((settingsData.providerCustomHeaders || {})[providerId] || {});
       // Load per-provider strategy override
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
@@ -1415,6 +1419,13 @@ export default function ProviderDetailPage() {
           </div>
         </Card>
       )}
+
+      {/* Custom Headers — provider-level, applied to every connection */}
+      <CustomHeadersSection
+        providerId={providerId}
+        value={providerCustomHeaders}
+        onSave={fetchConnections}
+      />
 
       {/* Connections */}
       {isFreeNoAuth ? (

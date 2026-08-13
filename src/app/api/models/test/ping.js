@@ -138,6 +138,11 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       // Claude-on-Copilot returns empty choices at max_tokens:1 (budget is spent
       // before a content token emits), so a 1-token probe yields a false negative.
       max_tokens: 16,
+      // Disable reasoning for the probe: reasoning models (e.g. deepseek-v4-flash on
+      // clinepass) spend the whole token budget on thinking, emit empty content, and
+      // the upstream returns 500. applyThinking normalizes this per-provider —
+      // native disable where supported, stripped for non-reasoning models.
+      reasoning_effort: "none",
       stream: false,
       messages: [{ role: "user", content: "hi" }],
     }),

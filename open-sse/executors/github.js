@@ -7,6 +7,7 @@ import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-r
 import { initState } from "../translator/index.js";
 import { parseSSELine, formatSSE } from "../utils/streamHelpers.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
+import { applyCustomHeaders } from "../utils/customHeaders.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 import crypto from "crypto";
@@ -173,6 +174,9 @@ export class GithubExecutor extends BaseExecutor {
   async executeWithResponsesEndpoint({ model, body, stream, credentials, signal, log, proxyOptions = null }) {
     const url = this.config.responsesUrl;
     const headers = this.buildHeaders(credentials, stream);
+    // /chat/completions goes through base.execute (which overlays custom headers);
+    // the /responses path builds its own request, so apply them here too for parity.
+    applyCustomHeaders(headers, credentials);
 
     const transformedBody = openaiToOpenAIResponsesRequest(model, body, stream, credentials);
 

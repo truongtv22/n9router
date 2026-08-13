@@ -57,7 +57,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, streamWatchdogEnabled = true }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, streamWatchdogEnabled = true, providerCustomHeaders }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -82,6 +82,17 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const runtimeTransport = resolveTransport(provider, sourceFormat);
   const targetFormat = modelTargetFormat || runtimeTransport?.format || getTargetFormat(provider, credentials);
   if (runtimeTransport && credentials) credentials.runtimeTransport = runtimeTransport;
+  // Provider-level custom headers apply to every connection of this provider, so merge
+  // them into the connection credentials (later per-connection headers still win).
+  if (providerCustomHeaders && credentials && credentials.providerSpecificData) {
+    credentials.providerSpecificData = {
+      ...credentials.providerSpecificData,
+      customHeaders: {
+        ...(providerCustomHeaders || {}),
+        ...(credentials.providerSpecificData.customHeaders || {}),
+      },
+    };
+  }
   const stripList = getModelStrip(alias, model);
   const upstreamModel = getModelUpstreamId(alias, model);
 

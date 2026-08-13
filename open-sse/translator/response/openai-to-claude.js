@@ -222,7 +222,15 @@ export function openaiToClaudeResponse(chunk, state) {
   }
 
   // Finish
-  if (choice.finish_reason) {
+  // Guard against providers that emit more than one terminal chunk. DeepInfra/
+  // OpenRouter-shaped upstreams (e.g. cline.bot deepseek-v4-flash) send TWO
+  // `finish_reason:"stop"` chunks — the first without usage, the second carrying
+  // it. Without this guard we emit message_delta + message_stop twice, and the
+  // Anthropic SDK client throws "Received message_stop without a current
+  // message" on the duplicate. The top-of-function usage block still runs on the
+  // later chunk, so state.usage (used for logging) stays accurate.
+  if (choice.finish_reason && !state.messageStopSent) {
+    state.messageStopSent = true;
     stopThinkingBlock(state, results);
     stopTextBlock(state, results);
 
@@ -253,6 +261,7 @@ export function openaiToClaudeResponse(chunk, state) {
       delta: { stop_reason: convertFinishReason(choice.finish_reason) },
       usage: finalUsage
     });
+    state.messageStopSent = true;
     results.push({ type: "message_stop" });
   }
 

@@ -5,6 +5,7 @@ import { DATA_DIR } from "@/lib/dataDir";
 import { createRequire } from "node:module";
 import { setRtkEnabled } from "open-sse/rtk/index.js";
 import { resetComboRotation } from "open-sse/services/combo.js";
+import { normalizeCustomHeaders } from "open-sse/utils/customHeaders.js";
 import bcrypt from "bcryptjs";
 import path from "path";
 
@@ -84,6 +85,30 @@ export async function PATCH(request) {
       if (!body.oidcClientSecret || !String(body.oidcClientSecret).trim()) {
         delete body.oidcClientSecret;
       }
+    }
+
+    // Provider-level custom headers: merged per provider so updating one provider
+    // never wipes another's headers. Each entry is a { name: value } map, validated
+    // with the same rules as connection-level headers.
+    if (Object.prototype.hasOwnProperty.call(body, "providerCustomHeaders")) {
+      const existingOverrides = (await getSettings()).providerCustomHeaders || {};
+      const incoming = body.providerCustomHeaders;
+      if (incoming == null || typeof incoming !== "object" || Array.isArray(incoming)) {
+        return NextResponse.json(
+          { error: "providerCustomHeaders must be an object keyed by provider" },
+          { status: 400 }
+        );
+      }
+      const merged = { ...existingOverrides };
+      for (const [providerId, headers] of Object.entries(incoming)) {
+        const norm = normalizeCustomHeaders(headers);
+        if (norm.error) {
+          return NextResponse.json({ error: norm.error }, { status: 400 });
+        }
+        if (Object.keys(norm.value).length === 0) delete merged[providerId];
+        else merged[providerId] = norm.value;
+      }
+      body.providerCustomHeaders = merged;
     }
 
     const settings = await updateSettings(body);
