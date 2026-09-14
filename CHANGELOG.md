@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.60 (2026-09-14)
+
+### Upstream merge
+- **9router v0.5.75**: Merged latest upstream capabilities, model catalog additions, provider integrations, and protocol fixes (covering 42 commits from upstream master).
+- **Video Generation Adapter Layer**: Added multi-provider video generation on `/v1/videos/*` via an extensible adapter layer (`open-sse/handlers/videoProviders/`), introducing Google Cloud Vertex AI (Veo 3.1, Veo 3, Veo 2 with Service Account OAuth, `:predictLongRunning` payload translation, and `:fetchPredictOperation` polling) and OpenRouter video generation with path sanitization guards.
+- **Xiaomi MiMo Dual-Auth & Desktop Integration**: Merged MiMo Desktop support into `xiaomi-mimo` with dual authentication (`sk-` API keys for cloud API + OAuth/Desktop session for Preview models), custom encrypted ECDH flow (`X25519` → `SHA-256` → `AES-256-GCM`) with loopback callback proxy, 1-click local desktop `auth.json` auto-import, and account session weekly quota tracking.
+- **Claude Code CLI & Anthropic Protocol**: Added a 1M-context toggle (`[1m]`) and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (100K–1M threshold) in the Claude CLI tool card; capped re-anchored `cache_control` breakpoints at the 4-marker Anthropic limit to avoid 400 errors causing cascading combo failovers; normalized adaptive auto effort (`output_config.effort`); forwarded `anthropic-beta` flags to upstream nodes; and scoped Claude tool typing to gateways declaring `requireClaudeToolType`.
+- **Antigravity Enhancements & Weekly Quota**: Integrated weekly quota tracking (`gemini_weekly` and `claude_gpt_weekly`) via `retrieveUserQuotaSummary` with 3-minute TTL caching and in-flight request deduplication; added anti-abuse jitter on multi-account OAuth refreshes; and normalized intermediate tool response handling.
+- **Gemini Thought Signature Persistence**: Added `thoughtSignatureStore` to persist and replay Gemini `thoughtSignature` keyed by `sessionId:tool_call_id`, eliminating multi-turn tool call collisions across processes.
+- **Codex & OpenAI Models**: Added GPT-6.0 Astra (`gpt-6-astra`) with vision, thinking, and search capabilities; added GPT Image 2.5, Flare, and Sunburst image models with multi-image support; added GPT-5.6 Sol, Terra, and Luna image aliases; and stripped Unicode-property patterns from tool schemas.
+- **Qoder Overhaul**: Added direct image uploading via `/api/v2/image/upload`, context tier auto-escalation, and stubbing oversized file blocks.
+- **OpenCode Go & Cline/Airforce**: Added newly published OpenCode Go models (`deepseek-v4.1-flash` catalog priority, `glm-5.3`, `kimi-k3`, `longcat-2.0`, `hy4-preview`, `hy3`, `muse-spark-1.2`, and `muse-spark-1.3-contributor`) with parallel tool call fixes on `/responses`; unwrapped `{success, data}` JSON envelopes on non-stream Cline chat completions; refreshed Airforce free catalog (`gpt-oss-120b`, `gpt-oss-20b`, `kimi-k2.7-code`).
+- **CLI & Dashboard UX**: CLI model selector grouped by provider with full-text search and manual custom model ID entry; 24h `maxAge` session cookie; re-validation connection health state cleanup; and VS Code extension setup guide.
+
+
 ## v0.4.59 (2026-09-11)
 
 ### Features & Improvements
