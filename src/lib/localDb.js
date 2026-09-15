@@ -51,7 +51,42 @@ const DEFAULT_SETTINGS = {
   periodicDbBackupsEnabled: true,
   cavemanEnabled: false,
   cavemanLevel: "full",
+  modelExposure: {
+    enabled: true,
+    mode: "all",
+    whitelist: [],
+    favorites: [],
+  },
 };
+
+// Whitelist/favorites hold bare model ids ("alias/model"); never prefixed.
+function normalizeModelExposure(settings) {
+  let changed = false;
+  const cur = settings.modelExposure;
+
+  if (cur !== undefined && (typeof cur !== "object" || Array.isArray(cur))) {
+    settings.modelExposure = { enabled: true, mode: "all", whitelist: [], favorites: [] };
+    return true;
+  }
+
+  if (cur === undefined) {
+    settings.modelExposure = { enabled: true, mode: "all", whitelist: [], favorites: [] };
+    return true;
+  }
+
+  const strArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim() !== "") : [];
+  const next = {
+    enabled: typeof cur.enabled === "boolean" ? cur.enabled : true,
+    mode: cur.mode === "whitelist" ? "whitelist" : "all",
+    whitelist: strArr(cur.whitelist),
+    favorites: strArr(cur.favorites),
+  };
+  if (JSON.stringify(next) !== JSON.stringify(cur)) {
+    settings.modelExposure = next;
+    changed = true;
+  }
+  return changed;
+}
 
 function cloneDefaultData() {
   return {
@@ -110,6 +145,7 @@ function ensureDbShape(data) {
 
     if (key === "settings" && typeof next.settings === "object" && !Array.isArray(next.settings)) {
       changed = normalizeObservabilitySettings(next.settings) || changed;
+      changed = normalizeModelExposure(next.settings) || changed;
 
       for (const [settingKey, settingDefault] of Object.entries(defaultValue)) {
         if (next.settings[settingKey] === undefined) {
@@ -752,6 +788,7 @@ export async function updateSettings(updates) {
   const db = await getDb();
   const normalizedUpdates = { ...updates };
   normalizeObservabilitySettings(normalizedUpdates);
+  normalizeModelExposure(normalizedUpdates);
   db.data.settings = { ...db.data.settings, ...normalizedUpdates };
   await safeWrite(db);
   return db.data.settings;

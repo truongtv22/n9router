@@ -5,7 +5,7 @@ import {
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
+import { getProviderConnections, getCombos, getCustomModels, getModelAliases, getSettings } from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
@@ -132,6 +132,26 @@ const parseOpenAIStyleModels = (data) => {
 // Header sent by fetchCompatibleModelIds to detect cross-instance /models fetches
 // and break recursive loops between 9router instances connected to each other.
 const INTERNAL_MODELS_FETCH_HEADER = "x-9r-internal-models-fetch";
+
+import { applyWhitelist, toDiscoveryList, DISCOVERY_PREFIX } from "@/lib/modelExposure.js";
+
+// In-memory cache for buildModelsList (60s). Discovery calls once at startup and
+// has a 3s timeout; the live resolvers (kiro/qoder/github/...) can exceed that on a
+// busy DB, so serve cached list. Invalidated on exposure PUT.
+let modelsCache = null;
+let modelsCacheKey = null;
+let modelsCacheAt = 0;
+const MODELS_CACHE_TTL_MS = 60_000;
+
+export function invalidateModelsCache() {
+  modelsCache = null;
+  modelsCacheKey = null;
+  modelsCacheAt = 0;
+}
+
+function cacheKeyFor(kindFilter, skipDynamicFetch) {
+  return `${skipDynamicFetch ? "dyn" : "static"}:${kindFilter.join(",")}`;
+}
 
 // LLM kind sentinel — combos/models with no explicit kind default to LLM
 const LLM_KIND = "llm";
@@ -283,9 +303,21 @@ export async function buildModelsList(kindFilter, options = {}) {
   }
   const isDisabled = (alias, modelId) => Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId);
 
+  // Dedup: compatible providers share a baseUrl (e.g. 3.9k GLM token-pool rows with
+  // per-account providerIds). Grouping by baseUrl collapses them into one provider so
+  // buildModelsList stays fast (discovery has a 3s client timeout) and the /v1/models
+  // list doesn't explode with near-identical entries. Non-compatible (named registry
+  // providers) stay keyed by provider id.
   const activeConnectionByProvider = new Map();
   for (const conn of connections) {
-    if (!activeConnectionByProvider.has(conn.provider)) {
+    if (isOpenAICompatibleProvider(conn.provider) || isAnthropicCompatibleProvider(conn.provider)) {
+      const baseUrl = typeof conn?.providerSpecificData?.baseUrl === "string"
+        ? conn.providerSpecificData.baseUrl.trim().replace(/\/$/, "")
+        : `nocfg:${conn.provider}`;
+      if (!activeConnectionByProvider.has(`compat:${baseUrl}`)) {
+        activeConnectionByProvider.set(`compat:${baseUrl}`, conn);
+      }
+    } else if (!activeConnectionByProvider.has(conn.provider)) {
       activeConnectionByProvider.set(conn.provider, conn);
     }
   }
@@ -356,7 +388,9 @@ export async function buildModelsList(kindFilter, options = {}) {
       const hasExplicitEnabledModels =
         Array.isArray(enabledModels) && enabledModels.length > 0;
       const isCompatibleProvider =
-        isOpenAICompatibleProvider(providerId) || isAnthropicCompatibleProvider(providerId);
+        providerId.startsWith("compat:") ||
+        isOpenAICompatibleProvider(providerId) ||
+        isAnthropicCompatibleProvider(providerId);
 
       // Build kind lookup for static models so we can filter even when only IDs are exposed
       const staticModelKindById = new Map(
@@ -383,9 +417,16 @@ export async function buildModelsList(kindFilter, options = {}) {
       // -thinking/-agentic variants per account). On failure, fall back to
       // whatever rawModelIds already holds.
       const liveResolver = LIVE_MODEL_RESOLVERS[providerId];
-      if (liveResolver && !hasExplicitEnabledModels) {
+      // skipDynamicFetch covers discovery + dashboard list: keep it fast (<3s client
+      // timeout), so live catalog resolvers are skipped there — they can add seconds
+      // waiting on revoked/failing upstream tokens. Full fetches still use them.
+      if (liveResolver && !hasExplicitEnabledModels && !skipDynamicFetch) {
         try {
-          const live = await liveResolver(conn);
+          // Timebox each live resolver: a failed upstream must not stall the list.
+          const live = await Promise.race([
+            liveResolver(conn),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("live resolver timeout")), 1500)),
+          ]);
           if (live?.models?.length) {
             rawModelIds = live.models.map((m) => m.id);
             liveModelKindById = new Map(
@@ -533,6 +574,34 @@ export async function OPTIONS() {
   });
 }
 
+// display_name lookup for discovery picks (registry names), keyed "alias/model".
+const PROVIDER_MODEL_NAME_BY_ID = (() => {
+  const map = new Map();
+  for (const [alias, models] of Object.entries(PROVIDER_MODELS)) {
+    for (const m of models || []) {
+      if (m?.id) map.set(`${alias}/${m.id}`, m.name || m.id);
+    }
+  }
+  return map;
+})();
+
+// Detect Claude Code gateway discovery request. UA "claude-cli/..." is primary;
+// anthropic-version falls back (some CC versions don't send UA on /models).
+function isClaudeCodeDiscovery(headers) {
+  const ua = headers?.get?.("user-agent") || "";
+  if (/claude/i.test(ua)) return true;
+  return !!headers?.get?.("anthropic-version");
+}
+
+async function getExposure() {
+  try {
+    const settings = await getSettings();
+    return settings.modelExposure || { enabled: true, mode: "all", whitelist: [], favorites: [] };
+  } catch {
+    return { enabled: true, mode: "all", whitelist: [], favorites: [] };
+  }
+}
+
 /**
  * GET /v1/models - OpenAI compatible models list (LLM/chat models only by default).
  * For other capabilities use /v1/models/{kind} (image, tts, stt, embedding, image-to-text, web).
@@ -540,8 +609,30 @@ export async function OPTIONS() {
 export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another 9router fetching our /models)
-    const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+    const isDiscovery = isClaudeCodeDiscovery(request.headers);
+    const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1" || isDiscovery;
+    const kindFilter = [LLM_KIND];
+    const cacheKey = cacheKeyFor(kindFilter, skipDynamicFetch);
+
+    // Serve from cache within TTL (skipDynamicFetch builds are the heavy ones)
+    let data = null;
+    if (modelsCache && modelsCacheKey === cacheKey && Date.now() - modelsCacheAt < MODELS_CACHE_TTL_MS) {
+      data = modelsCache;
+    }
+    if (data === null) {
+      data = await buildModelsList(kindFilter, { skipDynamicFetch });
+      modelsCache = data;
+      modelsCacheKey = cacheKey;
+      modelsCacheAt = Date.now();
+    }
+
+    const exposure = await getExposure();
+    if (exposure.mode === "whitelist") data = applyWhitelist(data, exposure.whitelist);
+
+    if (exposure.enabled && isDiscovery) {
+      data = toDiscoveryList(data, PROVIDER_MODEL_NAME_BY_ID);
+    }
+
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

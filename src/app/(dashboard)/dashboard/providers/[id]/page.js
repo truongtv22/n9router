@@ -1420,13 +1420,6 @@ export default function ProviderDetailPage() {
         </Card>
       )}
 
-      {/* Custom Headers — provider-level, applied to every connection */}
-      <CustomHeadersSection
-        providerId={providerId}
-        value={providerCustomHeaders}
-        onSave={fetchConnections}
-      />
-
       {/* Connections */}
       {isFreeNoAuth ? (
         <NoAuthProxyCard providerId={providerId} />
@@ -1645,6 +1638,13 @@ export default function ProviderDetailPage() {
           )}
         </Card>
       )}
+
+      {/* Custom Headers — provider-level, applied to every connection */}
+      <CustomHeadersSection
+        providerId={providerId}
+        value={providerCustomHeaders}
+        onSave={fetchConnections}
+      />
 
       {/* Models */}
       <Card>

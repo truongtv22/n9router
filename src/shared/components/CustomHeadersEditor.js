@@ -14,13 +14,6 @@ export default function CustomHeadersEditor({ rows, onChange }) {
 
   return (
     <div className="bg-sidebar/50 p-4 rounded-lg border border-border">
-      <p className="text-xs text-text-muted mb-3">
-        Applied to standard API and OpenAI/Anthropic-compatible connections, overriding
-        built-in headers. Leave a value empty to strip a default header. Native CLI
-        providers (Cursor, Kiro, Vertex, Grok, Perplexity…) craft their own headers and
-        may ignore these.
-      </p>
-
       {rows.length === 0 ? (
         <p className="text-xs text-text-muted">No custom headers.</p>
       ) : (

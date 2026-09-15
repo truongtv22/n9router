@@ -164,7 +164,10 @@ export default function ClaudeToolCard({
     setApplying(true);
     setMessage(null);
     try {
-      const env = { ANTHROPIC_BASE_URL: getEffectiveBaseUrl() };
+      const env = {
+        ANTHROPIC_BASE_URL: getEffectiveBaseUrl(),
+        CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+      };
 
       // Get key from dropdown, fallback to first key or sk_9router for localhost
       const keyToUse = selectedApiKey?.trim()
@@ -237,7 +240,11 @@ export default function ClaudeToolCard({
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
       : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
-    const env = { ANTHROPIC_BASE_URL: getEffectiveBaseUrl(), ANTHROPIC_AUTH_TOKEN: keyToUse };
+    const env = {
+      ANTHROPIC_BASE_URL: getEffectiveBaseUrl(),
+      ANTHROPIC_AUTH_TOKEN: keyToUse,
+      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+    };
     tool.defaultModels.forEach((model) => {
       const targetModel = modelMappings[model.alias];
       if (targetModel && model.envKey) env[model.envKey] = targetModel;
@@ -377,6 +384,16 @@ export default function ClaudeToolCard({
                       <option key={opt.label} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Discovery link */}
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
+                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Model discovery</span>
+                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
+                  <p className="text-xs text-text-muted">
+                    Quản lý model hiển thị qua /v1/models và Claude Code discovery tại{" "}
+                    <a href="/dashboard/models" className="text-primary underline">Models</a>.
+                  </p>
                 </div>
 
                 {/* CC Filter Naming */}

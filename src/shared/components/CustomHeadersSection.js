@@ -108,7 +108,7 @@ export default function CustomHeadersSection({
           >
             Add
           </Button>
-          <Button onClick={handleSave} disabled={saving || (!dirty && !hasAnything)}>
+          <Button size="sm" onClick={handleSave} disabled={saving || (!dirty && !hasAnything)}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </div>

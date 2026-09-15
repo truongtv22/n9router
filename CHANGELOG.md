@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **`9router claude`**: Launch Claude Code against the local gateway with `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, pre-write `~/.claude/cache/gateway-models.json`, and keep `/model` "From gateway" in sync. Dashboard Apply / TUI Quick Setup now write the same discovery flag.
+
 ## v0.4.52 (2026-08-08)
 
 ### Fixes

@@ -68,6 +68,17 @@ const { ensureTrayRuntime } = require("./hooks/trayRuntime");
 const args = process.argv.slice(2);
 
 // Subcommands run against an already-running gateway and bypass launcher setup.
+if (args[0] === "claude") {
+  const { run } = require("./src/cli/commands/claude");
+  run(args.slice(1))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      console.error(`❌ ${err?.message || err}`);
+      process.exit(1);
+    });
+  return;
+}
+
 if (args[0] === "xai" && args[1] === "video") {
   const { run } = require("./src/cli/commands/xaiVideo");
   run(args.slice(2))
@@ -152,6 +163,8 @@ Options:
   -v, --version       Show version
 
 Commands:
+  claude [args...]    Launch Claude Code wired to this gateway
+                      (enables /model From gateway discovery)
   xai video --prompt "..." --output video.mp4
                       Generate a Grok Imagine video via the running gateway
                       (see: ${APP_NAME} xai video --help)

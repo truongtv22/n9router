@@ -91,8 +91,17 @@ export function resolveModelAliasFromMap(alias, aliases) {
  * @param {string} modelStr - Model string
  * @param {object|function} aliasesOrGetter - Aliases object or async function to get aliases
  */
+// /v1/models discovery trả id "claude--{alias}/{model}"; strip prefix trước khi resolve.
+// ponytail: chỉ discovery của Claude Code gửi prefix này; client khác không ảnh hưởng.
+const DISCOVERY_PREFIX = "claude--";
+export function stripDiscoveryPrefix(modelStr) {
+  return typeof modelStr === "string" && modelStr.startsWith(DISCOVERY_PREFIX)
+    ? modelStr.slice(DISCOVERY_PREFIX.length)
+    : modelStr;
+}
+
 export async function getModelInfoCore(modelStr, aliasesOrGetter) {
-  const parsed = parseModel(modelStr);
+  const parsed = parseModel(stripDiscoveryPrefix(modelStr));
 
   if (!parsed.isAlias) {
     return {

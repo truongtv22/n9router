@@ -85,7 +85,12 @@ async function claudeQuickSetup(port) {
     return;
   }
 
-  const env = { ANTHROPIC_BASE_URL: endpoint, ANTHROPIC_AUTH_TOKEN: apiKey, API_TIMEOUT_MS: "600000" };
+  const env = {
+    ANTHROPIC_BASE_URL: endpoint,
+    ANTHROPIC_AUTH_TOKEN: apiKey,
+    API_TIMEOUT_MS: "600000",
+    CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+  };
   CLAUDE_MODEL_TYPES.forEach(t => { env[t.envKey] = t.defaultValue; });
 
   const result = await api.applyCliToolSettings("claude", { env });
@@ -112,6 +117,7 @@ async function claudeSelectModel(modelType, port) {
     const apiKey = await getFirstApiKey();
     env.ANTHROPIC_BASE_URL = endpoint;
     env.API_TIMEOUT_MS = "600000";
+    env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY = "1";
     if (apiKey) env.ANTHROPIC_AUTH_TOKEN = apiKey;
   }
 

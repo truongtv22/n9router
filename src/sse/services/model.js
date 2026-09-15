@@ -1,7 +1,10 @@
 // Re-export from open-sse with localDb integration
 import { getModelAliases, getComboByName, getProviderNodes } from "@/lib/localDb";
-import { parseModel as parseModelCore, resolveModelAliasFromMap, getModelInfoCore } from "open-sse/services/model.js";
+import { parseModel as parseModelCore, resolveModelAliasFromMap, getModelInfoCore, stripDiscoveryPrefix as stripDiscoveryPrefixCore } from "open-sse/services/model.js";
 import REGISTRY from "open-sse/providers/registry/index.js";
+
+// Re-export so chat.js can strip "claude--" without importing open-sse directly
+export const stripDiscoveryPrefix = stripDiscoveryPrefixCore;
 
 // Local provider alias overrides (HMR-friendly, applied on top of open-sse map)
 const LOCAL_PROVIDER_ALIASES = {
@@ -36,7 +39,7 @@ export async function resolveModelAlias(alias) {
  * Get full model info (parse or resolve)
  */
 export async function getModelInfo(modelStr) {
-  const parsed = parseModel(modelStr);
+  const parsed = parseModel(stripDiscoveryPrefix(modelStr));
 
   if (!parsed.isAlias) {
     // Provider-node prefixes are user-defined. They must not override built-in
@@ -83,10 +86,12 @@ export async function getModelInfo(modelStr) {
  * @returns {Promise<string[]|null>} Array of models or null if not a combo
  */
 export async function getComboModels(modelStr) {
+  // Discovery ids arrive "claude--{combo}"; strip before lookup so combo routes work.
+  const stripped = stripDiscoveryPrefix(modelStr);
   // Only check if it's not in provider/model format
-  if (modelStr.includes("/")) return null;
+  if (stripped.includes("/")) return null;
 
-  const combo = await getComboByName(modelStr);
+  const combo = await getComboByName(stripped);
   if (combo && combo.models && combo.models.length > 0) {
     return combo.models;
   }

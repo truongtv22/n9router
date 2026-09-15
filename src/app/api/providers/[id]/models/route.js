@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProviderConnectionById } from "@/models";
+import { getSettings } from "@/lib/localDb";
+import { applyCustomHeaders } from "open-sse/utils/customHeaders.js";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider } from "@/shared/constants/providers";
 import { GEMINI_CONFIG } from "@/lib/oauth/constants/oauth";
 import { refreshGoogleToken, refreshCodexToken, updateProviderCredentials } from "@/sse/services/tokenRefresh";
@@ -436,6 +438,15 @@ const PROVIDER_MODELS_CONFIG = {
   }
 };
 
+// Merge provider-level + per-connection custom headers, mirroring chatCore so the
+// /models import hits the upstream with the same headers as real chat requests.
+const buildCustomHeaders = async (connection) => {
+  const settings = await getSettings();
+  const providerHeaders = (settings.providerCustomHeaders || {})[connection.provider] || {};
+  const connectionHeaders = connection.providerSpecificData?.customHeaders || {};
+  return { ...providerHeaders, ...connectionHeaders };
+};
+
 /**
  * GET /api/providers/[id]/models - Get models list from provider
  */
@@ -454,12 +465,14 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: "No base URL configured for OpenAI compatible provider" }, { status: 400 });
       }
       const url = `${baseUrl.replace(/\/$/, "")}/models`;
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${connection.apiKey}`,
+      };
+      applyCustomHeaders(headers, { providerSpecificData: { customHeaders: await buildCustomHeaders(connection) } });
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${connection.apiKey}`,
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -493,14 +506,16 @@ export async function GET(request, { params }) {
       }
 
       const url = `${baseUrl}/models`;
+      const headers = {
+        "Content-Type": "application/json",
+        "x-api-key": connection.apiKey,
+        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${connection.apiKey}`
+      };
+      applyCustomHeaders(headers, { providerSpecificData: { customHeaders: await buildCustomHeaders(connection) } });
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": connection.apiKey,
-          "anthropic-version": "2023-06-01",
-          "Authorization": `Bearer ${connection.apiKey}`
-        },
+        headers,
       });
 
       if (!response.ok) {
