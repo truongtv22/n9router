@@ -32,6 +32,19 @@ const DEFAULT_SETTINGS = {
   comboStrategies: {},
   requireLogin: true,
   tunnelDashboardAccess: true,
+  authMode: "password",
+  ssoType: "oidc",
+  oidcIssuerUrl: "",
+  oidcClientId: "",
+  oidcClientSecret: "",
+  oidcScopes: "openid profile email",
+  oidcLoginLabel: "Sign in with OIDC",
+  samlEntryPoint: "",
+  samlIssuer: "urn:9router:sp",
+  samlCert: "",
+  samlLoginLabel: "Sign in with SAML SSO",
+  samlAttributeEmail: "email",
+  samlAttributeName: "name",
   observabilityEnabled: true,
   observabilityMaxRecords: 1000,
   observabilityBatchSize: 20,
@@ -586,14 +599,28 @@ export async function getCustomModels() {
   return db.data.customModels || [];
 }
 
-export async function addCustomModel({ providerAlias, id, type = "llm", name }) {
+export async function addCustomModel({ providerAlias, id, type = "llm", name, caps }) {
   const db = await getDb();
   if (!db.data.customModels) db.data.customModels = [];
-  const exists = db.data.customModels.some(
+  const existingIndex = db.data.customModels.findIndex(
     (m) => m.providerAlias === providerAlias && m.id === id && (m.type || "llm") === type
   );
-  if (exists) return false;
-  db.data.customModels.push({ providerAlias, id, type, name: name || id });
+  const entry = {
+    providerAlias,
+    id,
+    type,
+    name: name || id,
+    ...(caps ? { caps } : {}),
+  };
+  if (existingIndex >= 0) {
+    db.data.customModels[existingIndex] = {
+      ...db.data.customModels[existingIndex],
+      ...entry,
+    };
+    await safeWrite(db);
+    return true;
+  }
+  db.data.customModels.push(entry);
   await safeWrite(db);
   return true;
 }
@@ -779,9 +806,29 @@ export async function cleanupProviderConnections() {
   return cleaned;
 }
 
+// Merge raw settings with defaults; backward-compat for keys missing from a
+// settings object read before those keys existed (e.g. pre-SAML installs).
+export function mergeWithDefaults(raw) {
+  const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+  for (const [key, defVal] of Object.entries(DEFAULT_SETTINGS)) {
+    if (merged[key] === undefined) {
+      if (
+        key === "outboundProxyEnabled" &&
+        typeof merged.outboundProxyUrl === "string" &&
+        merged.outboundProxyUrl.trim()
+      ) {
+        merged[key] = true;
+      } else {
+        merged[key] = defVal;
+      }
+    }
+  }
+  return merged;
+}
+
 export async function getSettings() {
   const db = await getDb();
-  return db.data.settings || { cloudEnabled: false };
+  return mergeWithDefaults(db.data.settings);
 }
 
 export async function updateSettings(updates) {

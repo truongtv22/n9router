@@ -218,7 +218,7 @@ export default function ProviderLimits() {
   );
 
   // Fetch quota for a specific connection
-  const fetchQuota = useCallback(async (connectionId, provider) => {
+  const fetchQuota = useCallback(async (connectionId, provider, { force = false } = {}) => {
     setLoading((prev) => ({ ...prev, [connectionId]: true }));
     setErrors((prev) => ({ ...prev, [connectionId]: null }));
 
@@ -226,7 +226,8 @@ export default function ProviderLimits() {
       console.log(
         `[ProviderLimits] Fetching quota for ${provider} (${connectionId})`,
       );
-      const response = await fetch(`/api/usage/${connectionId}`);
+      const url = `/api/usage/${connectionId}${force ? "?force=1" : ""}`;
+      const response = await fetch(url);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -297,7 +298,7 @@ export default function ProviderLimits() {
   // Refresh quota for a specific provider
   const refreshProvider = useCallback(
     async (connectionId, provider) => {
-      await fetchQuota(connectionId, provider);
+      await fetchQuota(connectionId, provider, { force: true });
       setLastUpdated(new Date());
     },
     [fetchQuota],
@@ -598,6 +599,17 @@ export default function ProviderLimits() {
     const providerVisibility = previous[provider] || {};
     const hidden = new Set(providerVisibility.hidden || []);
     hidden.add(key);
+    if (provider === "antigravity") {
+      if (key === "gemini") {
+        for (const k of hidden) {
+          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
+        }
+      } else if (key === "claude") {
+        for (const k of hidden) {
+          if (k.startsWith("claude-")) hidden.delete(k);
+        }
+      }
+    }
     const next = {
       ...previous,
       [provider]: {
@@ -616,6 +628,17 @@ export default function ProviderLimits() {
     const providerVisibility = previous[provider] || {};
     const hidden = new Set(providerVisibility.hidden || []);
     hidden.delete(key);
+    if (provider === "antigravity") {
+      if (key === "gemini") {
+        for (const k of hidden) {
+          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
+        }
+      } else if (key === "claude") {
+        for (const k of hidden) {
+          if (k.startsWith("claude-")) hidden.delete(k);
+        }
+      }
+    }
     const next = {
       ...previous,
       [provider]: {
@@ -1293,6 +1316,11 @@ export default function ProviderLimits() {
                     }
                     onHideQuota={(quotaRow) => handleHideQuota(conn.provider, quotaRow)}
                   />
+                )}
+                {quota?.message && !error && !isLoading && (
+                  <p className="mt-2 px-1 text-[10px] leading-relaxed text-text-muted">
+                    {quota.message}
+                  </p>
                 )}
                 {hiddenQuotaRows.length > 0 && (
                   <div className="mt-2 flex min-w-0 items-center gap-1 border-t border-black/5 pt-2 text-[10px] text-text-muted dark:border-white/5">

@@ -5,6 +5,97 @@
 ### Features
 - **`9router claude`**: Launch Claude Code against the local gateway with `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, pre-write `~/.claude/cache/gateway-models.json`, and keep `/model` "From gateway" in sync. Dashboard Apply / TUI Quick Setup now write the same discovery flag.
 
+## v0.4.60 (2026-09-14)
+
+### Upstream merge
+- **9router v0.5.75**: Merged latest upstream capabilities, model catalog additions, provider integrations, and protocol fixes (covering 42 commits from upstream master).
+- **Video Generation Adapter Layer**: Added multi-provider video generation on `/v1/videos/*` via an extensible adapter layer (`open-sse/handlers/videoProviders/`), introducing Google Cloud Vertex AI (Veo 3.1, Veo 3, Veo 2 with Service Account OAuth, `:predictLongRunning` payload translation, and `:fetchPredictOperation` polling) and OpenRouter video generation with path sanitization guards.
+- **Xiaomi MiMo Dual-Auth & Desktop Integration**: Merged MiMo Desktop support into `xiaomi-mimo` with dual authentication (`sk-` API keys for cloud API + OAuth/Desktop session for Preview models), custom encrypted ECDH flow (`X25519` → `SHA-256` → `AES-256-GCM`) with loopback callback proxy, 1-click local desktop `auth.json` auto-import, and account session weekly quota tracking.
+- **Claude Code CLI & Anthropic Protocol**: Added a 1M-context toggle (`[1m]`) and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (100K–1M threshold) in the Claude CLI tool card; capped re-anchored `cache_control` breakpoints at the 4-marker Anthropic limit to avoid 400 errors causing cascading combo failovers; normalized adaptive auto effort (`output_config.effort`); forwarded `anthropic-beta` flags to upstream nodes; and scoped Claude tool typing to gateways declaring `requireClaudeToolType`.
+- **Antigravity Enhancements & Weekly Quota**: Integrated weekly quota tracking (`gemini_weekly` and `claude_gpt_weekly`) via `retrieveUserQuotaSummary` with 3-minute TTL caching and in-flight request deduplication; added anti-abuse jitter on multi-account OAuth refreshes; and normalized intermediate tool response handling.
+- **Gemini Thought Signature Persistence**: Added `thoughtSignatureStore` to persist and replay Gemini `thoughtSignature` keyed by `sessionId:tool_call_id`, eliminating multi-turn tool call collisions across processes.
+- **Codex & OpenAI Models**: Added GPT-6.0 Astra (`gpt-6-astra`) with vision, thinking, and search capabilities; added GPT Image 2.5, Flare, and Sunburst image models with multi-image support; added GPT-5.6 Sol, Terra, and Luna image aliases; and stripped Unicode-property patterns from tool schemas.
+- **Qoder Overhaul**: Added direct image uploading via `/api/v2/image/upload`, context tier auto-escalation, and stubbing oversized file blocks.
+- **OpenCode Go & Cline/Airforce**: Added newly published OpenCode Go models (`deepseek-v4.1-flash` catalog priority, `glm-5.3`, `kimi-k3`, `longcat-2.0`, `hy4-preview`, `hy3`, `muse-spark-1.2`, and `muse-spark-1.3-contributor`) with parallel tool call fixes on `/responses`; unwrapped `{success, data}` JSON envelopes on non-stream Cline chat completions; refreshed Airforce free catalog (`gpt-oss-120b`, `gpt-oss-20b`, `kimi-k2.7-code`).
+- **CLI & Dashboard UX**: CLI model selector grouped by provider with full-text search and manual custom model ID entry; 24h `maxAge` session cookie; re-validation connection health state cleanup; and VS Code extension setup guide.
+
+
+## v0.4.59 (2026-09-11)
+
+### Features & Improvements
+- **Custom Models Capability Persistence**: Fixed `addCustomModel()` in `src/lib/localDb.js` to persist capability flags (`caps`) in DB and allow updating existing custom models, ensuring manual toggles (like Vision and Reasoning) are preserved.
+- **DeepSeek V4.1 Vision Support**: Added native pattern matching for `deepseek-v4.1` with multimodal vision and reasoning capabilities in `open-sse/providers/capabilities.js`.
+- **Dynamic Model Catalog Sync Across Webpack Bundles**: Stored `catalogSource` on `globalThis.__9r_catalogSource` so that Next.js API route handlers (`/api/models`, `/v1/models`) share the dynamically synced `models.dev` catalog with `instrumentation.js`.
+- **AgentKit Integration**: Added AgentKit promo component to sidebar and updated documentation.
+
+## v0.4.58 (2026-09-05)
+
+### Upstream merge
+- **9router v0.5.65**: Merged latest upstream capabilities, model catalog refresh, and protocol improvements.
+- **Web Search & Fetch**: Added Ollama Cloud remote web fetch (`/v1/fetch`), Google Search grounded via Antigravity OAuth (`/v1/search`), native Xquik X/Twitter search provider with cursor pagination, and credential fallback for Ollama/ZAI/GLM search.
+- **Dynamic Model Catalog**: Integrated daily background sync of model capabilities, modalities, and context limits from `models.dev` (with ETag/mtime caching and `MODEL_CATALOG_SYNC=off` toggle). Added custom model capability switches for vision/reasoning with live refresh. Converted `/v1/models/[kind]` to catch-all `/v1/models/[...model]` for single-model inspection with provider-prefixed IDs.
+- **Catalog Refreshes**: Added Claude Fable 5.1 with adaptive thinking (`output_config.effort`) and updated Claude Code fingerprint (2.1.258); GLM-5.3 & GLM-5.3-Flash with 1M context, vision/multimodal, and reasoning effort; DeepSeek V4 Vision and Grok 4.5/4.6 (500k context); CodeBuddy-CN preview models; streamlined TokenRouter seed models; added provider icons for alims-intl, alitp-intl, fish-audio, selfhosted-*, and xquik.
+- **Antigravity Quota Routing**: Added 429 strike-breaker circuit breaker (blocks connection/model in RAM for 15m after 3 strikes within 60s, clears on success); reset-aware fallback returning earliest upstream `resetAt` when exhausted; automatic `-WxH` aspect-ratio suffix mapping for image models; and competitive branding prompt sanitization (stripping Zed Claude prompt and rewriting OpenCode references). Bumped default Antigravity IDE version to 2.11.0 with dual-signature override support.
+- **CLI Tools & Dashboard**: Added Bulk Grok CLI account batch import modal; centralized unified CLI endpoint and API key presets across all tool cards; provider status filter (`All`, `Active`, `Inactive`, `No connection`); connection list scrollable UX; and flash-of-unstyled-theme fix on first paint.
+- **Quota Tracking & Observability**: Added Groq rate-limit headers tracking (`x-ratelimit-*`), Zed plan quotas (edit predictions, hosted requests, billing cycle reset), GPT-5.3-Codex-Spark quota windows (`spark_session` and `spark_weekly`), GLM multi-interval quotas (`CREDIT_LIMIT` and 5h/7d intervals), and captured `cached_tokens` on non-streaming OpenAI Responses/Codex requests.
+- **Security & Protocols**: SSRF guard hardening against alternate IPv6 encodings, trailing dots, and DNS rebinding; protected `/responses` in dashboard guard; stripped Claude Code `[1m]` context markers; dropped foreign `server_tool_use` IDs; prevented caching on `defer_loading` tools; tool name decloaking in same-format streaming; CommandCode in-stream error frame translation; Kiro MITM AWS EventStream binary and inline image forwarding; and consolidated stream disconnect handling.
+
+### n9router preservation
+- **State DB**: Preserved lowdb (`db.json`) storage with atomic writes and corruption recovery, rejecting upstream SQLite migration.
+- **Runtime**: Retained native `node:sqlite` for usage limiting and CLI hooks, rejecting `better-sqlite3` and `sql.js`.
+- **Fork capabilities**: Preserved Antigravity Token Swap with 503 backoff retries, account health monitor (`healthStore.js`), Gemini 3.8 Flash tiered models (`gemini-3.8-flash-high|medium|low`), stream watchdog, Cursor BYOK catalog, ApiKeyUsageReport, UsageFlexReport, and EndpointPresetControl.
+
+## v0.4.57 (2026-09-04)
+
+### Improvements
+- **SQLite Engine (`node:sqlite`)**: Replaced third-party `better-sqlite3` native C++ dependency with Node.js built-in `node:sqlite` (`DatabaseSync`). Eliminates `node-gyp` compilation requirements, C++ build tools (`python3`, `make`, `g++`, `linux-headers`) in Docker, and over 400 lines of brittle prebuild-install and runtime self-healing hooks.
+- **Cursor Auto-Import**: Migrated local Cursor SQLite database (`state.vscdb`) token extraction to `node:sqlite` in read-only mode (`{ readOnly: true }`).
+- **Dependencies & Build**: Removed `better-sqlite3` from dependencies and Next.js external packages, added Node engine requirement `>=22.13.0`, and cleaned up standalone build and publish scripts.
+
+## v0.4.56 (2026-09-04)
+
+### Features
+- **Antigravity Gemini 3.8 Flash**: Added `gemini-3.8-flash-high|medium|low`, Gemini direct API `gemini-3.8-flash`, MITM proxy extraction/synonyms, quota tracking, and capabilities.
+
+### Fixes
+- **Antigravity MITM (Windows)**: Added platform capability flags (`isWin`, `needsSudoPassword: !isWin`) to the Antigravity MITM status endpoint to avoid triggering sudo password prompts on Windows hosts.
+- **CommandCode vision (#7)**: Preserved image inputs for vision-capable CommandCode models by correcting capability detection, translating OpenAI/Claude image blocks to the upstream AI SDK format, and prefetching remote images as base64 before dispatch.
+
+## v0.4.55 (2026-08-27)
+
+### Improvements
+- **MITM status feedback**: Improved error reporting and diagnostics on the CLI tools dashboard card (`MitmServerCard`), gracefully surfacing HTTP 401/403 auth hints and network error details when connecting to the Antigravity MITM status endpoint.
+
+## v0.4.54 (2026-08-25)
+
+### Upstream merge
+- **9router v0.5.55**: Adopted refreshed provider catalog, authentication, translation, streaming, and CLI packaging improvements.
+- **SAML 2.0 SSO**: Added native SAML 2.0 Single Sign-On integration, IdP metadata XML & certificate uploaders, SSO protocol switcher, dynamic SAML sign-in button, and SAML user badges.
+- **Providers and models**: Added Alibaba Token Plan (`token-plan.ap-southeast-1`), Kimchi dual auth (OAuth + API key), Fish Audio text-to-speech provider, `glm-5.3` for GLM Coding and GLM (China) registries, Opencode-Go transport format routing with per-model guards, and `llm7` test support.
+- **Routing and translation**: Added Kiro multi-surface auth-aware endpoint routing, integrity-gate streaming, header-based interception (`x-amz-target`), `auto` model slot, and accurate output token accounting. Added early billing error detection in Qoder SSE for failover. Fixed OpenAI Responses empty `tool_calls` array premature termination (#3234) and preserved `prompt_cache_key` when converting chat to responses (#3216).
+- **Quota and client handling**: Strip competitive system prompts in Antigravity to prevent 429 quota errors from Zed IDE. Forward official client headers for free-tier Opencode requests. Added 120s TTL caching and promise dedup for Claude quota calls with `?force=1` bypass for manual refresh. Re-anchored Claude passthrough cache breakpoints with 1h TTL.
+- **Combos and adapters**: Vision adapter image detection from Hermes and attachment payloads; stripped `stream_options` from Fusion panel fan-out; added `api_key` parameter in Hermes YAML config.
+- **Documentation and i18n**: Added Spanish (`README.es.md`), French (`README.fr.md`), and Brazilian Portuguese (`README.pt-BR.md`) documentation translations.
+
+### Security
+- **Socket peer validation**: Require proof that `x-9r-real-ip` originates from trusted local socket connections (GHSA-pjm4-8fpg-f9p6).
+- **SSRF guard**: Validate and reject non-public base URLs on web/search endpoints.
+- **Authentication**: Block fresh-install remote login using default password (returns 403 without issuing JWT).
+- **Privacy**: Redacted sensitive payload contents on `/api/usage/request-details`.
+
+### n9router preservation
+- **State DB**: Retained lowdb (`db.json`) as the sole state persistence layer, rejecting upstream SQLite migration.
+- **Fork capabilities**: Preserved MITM token pool swapping, retry classification, token cooldowns, stream watchdog controls, API-key limits, token-swap usage observer, Antigravity account-type badges, cached-token tracking, ApiKeyUsageReport, UsageFlexReport, Cursor BYOK installer, and fork branding.
+
+## v0.4.53 (2026-08-15)
+
+### Features
+- **Antigravity Gemini 3.7 Flash**: Added `ag/gemini-3.7-flash-high|medium|low`, Gemini API `gemini-3.7-flash`, MITM aliases/slots, pricing, and capabilities.
+
+### Fixes
+- **Quota Tracker**: Antigravity now fingerprints as IDE **2.5.5**, the first client version whose `fetchAvailableModels` response includes Gemini 3.7 Flash quotas.
+- **Quota parsing**: Keep the live `gemini-3.7-flash-tiered` bucket as a fallback when Google has not split high/medium/low keys.
+
 ## v0.4.52 (2026-08-08)
 
 ### Fixes

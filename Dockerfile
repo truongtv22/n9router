@@ -5,7 +5,7 @@ WORKDIR /app
 
 FROM base AS builder
 
-RUN apk --no-cache upgrade && apk --no-cache add nodejs npm python3 make g++ linux-headers
+RUN apk --no-cache upgrade && apk --no-cache add nodejs npm
 
 COPY package.json ./
 COPY hooks ./hooks
@@ -40,10 +40,12 @@ COPY --from=builder /app/src/mitm ./src/mitm
 COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
 # Ensure `next` is available at runtime in case tracing did not include it.
 COPY --from=builder /app/node_modules/next ./node_modules/next
+# node-machine-id is createRequire-loaded at runtime; tracing omits it.
+COPY --from=builder /app/node_modules/node-machine-id ./node_modules/node-machine-id
 
 RUN mkdir -p /app/data && chown -R bun:bun /app && \
   mkdir -p /app/data-home && chown bun:bun /app/data-home && \
-  ln -sf /app/data-home /root/.9router 2>/dev/null || true
+  ln -sf /app/data-home /root/.n9router 2>/dev/null || true
 
 # Fix permissions at runtime (handles mounted volumes and custom DATA_DIR)
 RUN apk --no-cache add su-exec

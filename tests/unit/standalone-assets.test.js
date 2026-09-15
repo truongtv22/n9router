@@ -5,6 +5,8 @@ import { mkdtempSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { copyStandaloneAssets } from "../../scripts/copy-standalone-assets.mjs";
 
+const projectRoot = join(import.meta.dirname, "..", "..");
+
 function createBuildFixture(distDir) {
   const projectRoot = mkdtempSync(join(tmpdir(), "9router-standalone-assets-"));
   const buildRoot = join(projectRoot, distDir);
@@ -37,6 +39,17 @@ describe("standalone build assets", () => {
       .toBe("static asset");
   });
 
+  // Without the wrapper beside server.js nothing can prove a request is local.
+  it("copies the request-sanitizing server wrapper into the standalone output", () => {
+    const projectRoot = createBuildFixture(".next");
+    writeFileSync(join(projectRoot, "custom-server.js"), "wrapper");
+
+    copyStandaloneAssets({ projectRoot, distDir: ".next" });
+
+    expect(readFileSync(join(projectRoot, ".next", "standalone", "custom-server.js"), "utf8"))
+      .toBe("wrapper");
+  });
+
   it("does not modify workspace-traced CLI builds", () => {
     const projectRoot = createBuildFixture(".next-cli-build");
     const previousMode = process.env.NEXT_TRACING_ROOT_MODE;
@@ -51,5 +64,16 @@ describe("standalone build assets", () => {
 
     expect(() => readFileSync(join(projectRoot, ".next-cli-build", "standalone", ".next-cli-build", "static", "chunks", "app.js")))
       .toThrow();
+  });
+
+  it("routes production and global npm starts through the trusted wrapper", () => {
+    const packageJson = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8"));
+    const launcher = readFileSync(join(projectRoot, "bin", "n9router.js"), "utf8");
+
+    expect(packageJson.scripts.postbuild).toContain("copy-standalone-assets.mjs");
+    expect(packageJson.scripts.start).toContain("custom-server.js");
+    expect(packageJson.scripts["start:bun"]).toContain("custom-server.js");
+    expect(launcher).toContain("[customServer]");
+    expect(launcher).not.toContain("[standaloneServer],");
   });
 });

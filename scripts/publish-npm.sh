@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
 # publish-npm.sh — Build the Next.js standalone output and publish/install npm packages
-# Usage: ./scripts/publish-npm.sh [--dry-run] [--local] [--tag <tag>]
-#   --local      Build, pack, and install the tarball globally for local testing
-#   --tag next   Publish as a release candidate (won't affect 'latest')
-#   --tag beta   Same idea with a different label
+# Usage: ./scripts/publish-npm.sh [--dry-run] [--local] [--skip-install] [--force-install] [--tag <tag>]
+#   --local          Build, pack, and install the tarball globally for local testing
+#   --skip-install   Skip npm install step during build
+#   --force-install  Force running npm install even if node_modules exists
+#   --tag next       Publish as a release candidate (won't affect 'latest')
+#   --tag beta       Same idea with a different label
 
 set -euo pipefail
 
 DRY_RUN=false
 LOCAL_INSTALL=false
+SKIP_INSTALL=false
+FORCE_INSTALL=false
 NPM_TAG="latest"
 ARGS=("$@")
 for i in "${!ARGS[@]}"; do
   [[ "${ARGS[$i]}" == "--dry-run" ]] && DRY_RUN=true
   [[ "${ARGS[$i]}" == "--local" ]] && LOCAL_INSTALL=true
+  [[ "${ARGS[$i]}" == "--skip-install" ]] && SKIP_INSTALL=true
+  [[ "${ARGS[$i]}" == "--force-install" ]] && FORCE_INSTALL=true
   if [[ "${ARGS[$i]}" == "--tag" ]]; then
     NPM_TAG="${ARGS[$((i+1))]:-next}"
   fi
@@ -138,8 +144,17 @@ if ! $LOCAL_INSTALL && [[ "$NPM_TAG" == "latest" ]] && npm_registry info "$PKG_N
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-info "Installing dependencies..."
-npm install
+if $SKIP_INSTALL; then
+  ok "Skipping dependency installation (--skip-install)."
+elif $LOCAL_INSTALL && [[ -d "node_modules" ]] && ! $FORCE_INSTALL; then
+  ok "Local mode: node_modules exists — skipping npm install."
+elif [[ -d "node_modules" ]] && ! $FORCE_INSTALL; then
+  info "Verifying dependencies (offline-first)..."
+  npm install --prefer-offline --no-audit --no-fund
+else
+  info "Installing dependencies..."
+  npm install --prefer-offline --no-audit --no-fund
+fi
 
 info "Cleaning previous build artifacts..."
 rm -rf .next
@@ -178,14 +193,7 @@ rm -rf .next/standalone/.vscode
 
 # ── Cross-platform hardening (native modules) ─────────────────────────────────
 info "Pruning host-native artifacts from standalone..."
-
-# 1) Remove entire better-sqlite3 module so postinstall does a clean install
-# with prebuild-install (downloads the correct prebuilt binary for the target
-# platform). Only stripping the .node file leaves a broken stub that npm
-# considers already-installed and skips reinstalling.
-rm -rf .next/standalone/node_modules/better-sqlite3
-
-# 2) Remove platform-specific sharp binary packs copied from the build host.
+# 1) Remove platform-specific sharp binary packs copied from the build host.
 # images.unoptimized=true, so these are not required at runtime.
 if [[ -d .next/standalone/node_modules/@img ]]; then
   find .next/standalone/node_modules/@img \
@@ -252,7 +260,7 @@ elif $LOCAL_INSTALL; then
   GLOBAL_NODE_MODULES=$(npm root -g)
   rm -rf "$GLOBAL_NODE_MODULES/.$PKG_NAME-"*
   npm uninstall -g "$PKG_NAME" || true
-  npm install -g "$TARBALL_PATH"
+  npm install -g --no-audit --no-fund "$TARBALL_PATH"
   rm -rf "$PACK_DIR"
 
   ok "Installed local package. Test with: n9router --version"
