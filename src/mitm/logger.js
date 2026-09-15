@@ -12,7 +12,13 @@ const log = (msg) => console.log(`[${time()}] [MITM] ${msg}`);
 const err = (msg) => console.error(`[${time()}] ❌ [MITM] ${msg}`);
 
 const DUMP_DIR = path.join(DATA_DIR, "logs", "mitm");
-if (!fs.existsSync(DUMP_DIR)) fs.mkdirSync(DUMP_DIR, { recursive: true });
+// Fail-safe: an unwritable DATA_DIR must not crash module import (pulls in by
+// every MITM-adjacent route, e.g. /api/tunnel/status via tailscale manager).
+try {
+  if (!fs.existsSync(DUMP_DIR)) fs.mkdirSync(DUMP_DIR, { recursive: true });
+} catch (e) {
+  console.warn(`[MITM] cannot create log dir ${DUMP_DIR}: ${e.message} — dumps disabled`);
+}
 
 // Clear all files inside DUMP_DIR (called on MITM server start to avoid unbounded growth)
 function clearDumpDir() {

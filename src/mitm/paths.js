@@ -4,7 +4,21 @@ const fs = require("fs");
 
 // Single source of truth for data directory — matches localDb.js logic
 function getDataDir() {
-  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  const configured = process.env.DATA_DIR;
+  if (configured) {
+    try {
+      fs.mkdirSync(configured, { recursive: true });
+      return configured;
+    } catch (e) {
+      if (e?.code === "EACCES" || e?.code === "EPERM") {
+        // e.g. a Docker-targeted DATA_DIR (/var/lib/...) while running as a
+        // regular user — fall back instead of crashing at import time.
+        console.warn(`[n9router mitm] DATA_DIR '${configured}' not writable → fallback to default`);
+      } else {
+        throw e;
+      }
+    }
+  }
   if (process.platform === "win32") {
     return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "n9router");
   }
